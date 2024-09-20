@@ -65,7 +65,9 @@ void print_file_info(struct dirent* entry, char* path, int max_size_len, int max
     snprintf(file_path, sizeof(file_path), "%s/%s", path, entry->d_name);
     lstat(file_path, &file_stat);
 
-    printf((S_ISDIR(file_stat.st_mode)) ? "d" : "-"); // Проверка на директорию
+    if(S_ISDIR(file_stat.st_mode)) printf("d");
+    else if(S_ISLNK(file_stat.st_mode)) printf("l");
+    else printf("-");
     printf((file_stat.st_mode & S_IRUSR) ? "r" : "-"); // Право на чтение
     printf((file_stat.st_mode & S_IWUSR) ? "w" : "-"); // Право на запись
     printf((file_stat.st_mode & S_IXUSR) ? "x" : "-"); // Право на исполнение
@@ -79,14 +81,14 @@ void print_file_info(struct dirent* entry, char* path, int max_size_len, int max
     printf("%*ld ", max_link_len + 1, file_stat.st_nlink);
     struct passwd* pw = getpwuid(file_stat.st_uid);
     if(pw != NULL){
-        printf("%*s ", max_user_len, pw->pw_name);
+        printf("%-*s ", max_user_len, pw->pw_name);
     }
     else{
         printf("%*d ", max_user_len, file_stat.st_uid);
     }
     struct group* gr = getgrgid(file_stat.st_gid);
     if(gr != NULL){
-        printf("%*s ", max_group_len, gr->gr_name);
+        printf("%-*s ", max_group_len, gr->gr_name);
     }
     else{
         printf("%*d ", max_group_len, file_stat.st_gid);
