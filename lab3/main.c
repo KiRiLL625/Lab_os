@@ -48,9 +48,9 @@ int main(void) {
         return 1;
     } else if (pid == 0) {
         printf("[CHILD] This is the child process, my pid: %d, parent pid: %d\n", getpid(), getppid());
+        sleep(10);
     } else {
         int status;
-        sleep(7);
         wait(&status);
         printf("[PARENT] This is the parent process, pid: %d, child pid is %d, parent pid is %d\n", getpid(), pid, getppid());
         printf("[PARENT} Child process exited with status %d\n", WEXITSTATUS(status));
