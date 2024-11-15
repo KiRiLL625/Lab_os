@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <regex.h>
 
 mode_t convert_numeric_mode(const char *mode_str) {
     mode_t mode = 0;
 
-    if (strlen(mode_str) != 3) {
+    if (strlen(mode_str) != 3 || mode_str[0] < '0' ||
+    mode_str[0] > '7' || mode_str[1] < '0' ||
+    mode_str[1] > '7' || mode_str[2] < '0' || mode_str[2] > '7') {
         fprintf(stderr, "Invalid numeric mode format\n");
         exit(1);
     }
@@ -15,7 +18,26 @@ mode_t convert_numeric_mode(const char *mode_str) {
     return mode;
 }
 
+void validate_mode_str(const char *mode_str) {
+    regex_t regex;
+    int reti;
+
+    reti = regcomp(&regex, "^[ugoa]*[+-][rwx]*$", REG_EXTENDED);
+    if (reti) {
+        fprintf(stderr, "Could not process mode\n");
+        exit(EXIT_FAILURE);
+    }
+
+    reti = regexec(&regex, mode_str, 0, NULL, 0);
+    if (reti) {
+        fprintf(stderr, "Invalid mode: %s\n", mode_str);
+        exit(EXIT_FAILURE);
+    }
+    regfree(&regex);
+}
+
 void set_symbolic_mode(const char *mode_str, mode_t *current_mode) {
+    validate_mode_str(mode_str);
     char ugo[5];
     mode_t add_mask = 0;
     mode_t remove_mask = 0;
