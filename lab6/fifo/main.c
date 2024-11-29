@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 
-#define FIFO_BUFFER "/tmp/my_fifo"
+#define FIFO_BUFFER "./fifo/my_fifo"
 
 int main() {
     pid_t pid;
