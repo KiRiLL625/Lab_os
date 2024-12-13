@@ -3,12 +3,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <string.h>
 #include <signal.h>
 
-#define SHM_NAME "/shmemory"
+#define FTOK_PATH "."
 #define MAX_LEN 256
 
 typedef struct {
@@ -17,34 +18,43 @@ typedef struct {
     int data_ready;
 } shared_data;
 
+int shmid;
+
 //Ctrl+C
 void handle_sigint(int sig) {
-    shm_unlink(SHM_NAME);
-    perror("SIGINT received, exiting");
+    if(shmctl(shmid, IPC_RMID, NULL)){
+        perror("shmctl");
+    }
+    else{
+        printf("SIGINT received, shmem deleted\n");
+    }
     exit(0);
 }
 
 int main() {
-    int shm_fd;
+    key_t shm_key;
     shared_data *shm_ptr;
 
     signal(SIGINT, handle_sigint);
 
-    //Проверка наличия разделяемой памяти
-    shm_fd = shm_open(SHM_NAME, O_CREAT | O_EXCL | O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("Shared memory already exists or cannot be created");
+    //Проверка существования разделяемой памяти
+    shm_key = ftok(FTOK_PATH, 'A');
+    if (shm_key == -1) {
+        perror("ftok");
         exit(1);
     }
 
-    //Установка размера разделяемой памяти
-    ftruncate(shm_fd, sizeof(shared_data));
-
-    //Отображение разделяемой памяти в адресное пространство
-    shm_ptr = mmap(0, sizeof(shared_data), PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shm_ptr == MAP_FAILED) {
-        perror("mmap");
+    shmid = shmget(shm_key, MAX_LEN, IPC_CREAT | IPC_EXCL | 0666);
+    if(shmid == -1){
+        perror("shmget");
+        printf("Shared memory already exists\n");
         exit(1);
+    }
+
+    shm_ptr = (shared_data*) shmat(shmid, NULL, 0);
+    if(shm_ptr == (void*) -1){
+        perror("shmat");
+        shmctl(shmid, IPC_RMID, NULL);
     }
 
     while (1) {
