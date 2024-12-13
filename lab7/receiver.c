@@ -3,11 +3,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <string.h>
 
-#define SHM_NAME "/shmemory"
+#define FTOK_PATH "."
 #define MAX_LEN 256
 
 typedef struct {
@@ -16,27 +17,35 @@ typedef struct {
     int data_ready;
 } shared_data;
 
+shared_data* shm_ptr;
+
+void hangle_sigint(int arg){
+    shmdt(shm_ptr);
+    printf("Shmem detached\n");
+}
+
 int main() {
-    int shm_fd;
-    shared_data *shm_ptr;
+    int shmid;
+    key_t shm_key;
 
     //Открытие разделяемой памяти
-    shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("shm_open");
+    shm_key = ftok(FTOK_PATH, 'A');
+    if (shm_key == -1) {
+        perror("ftok");
         exit(1);
     }
 
     //Установка размера разделяемой памяти
-    if (ftruncate(shm_fd, sizeof(shared_data)) == -1) {
-        perror("ftruncate");
+    shmid = shmget(shm_key, MAX_LEN, 0666);
+    if(shmid == -1){
+        perror("shmget");
+        printf("Cannot find shared memory\n");
         exit(1);
     }
 
-    //Отображение разделяемой памяти в адресное пространство
-    shm_ptr = mmap(0, sizeof(shared_data), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shm_ptr == MAP_FAILED) {
-        perror("mmap");
+    shm_ptr = (shared_data*) shmat(shmid, NULL, 0);
+    if(shm_ptr == (void*) -1){
+        perror("shmat");
         exit(1);
     }
 
