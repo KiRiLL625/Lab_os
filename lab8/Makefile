@@ -3,7 +3,7 @@
 all: mtx
 
 mtx: main.c
-	gcc main.c -o mtx
+	gcc main.c -o mtx -lpthread
 
 clean:
 	rm -f mtx
