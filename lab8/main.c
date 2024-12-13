@@ -20,7 +20,7 @@ void* writer_thread(void* arg) {
             break;
         }
         snprintf(shared_array + counter * 2, ARRAY_SIZE - counter * 2, "%d ", counter);
-        printf("Writer updated array at index: %d\n", counter);
+        printf("Array updated at index: %d\n", counter);
         counter++;
         pthread_mutex_unlock(&mutex);
         sleep(1);
@@ -37,7 +37,7 @@ void* reader_thread(void* arg) {
             pthread_mutex_unlock(&mutex);
             break;
         }
-        printf("Reader %d reads array: %s| tid: [%lx]\n", reader_id, shared_array, tid);
+        printf("Reader (id[%d]) reads array: [%s]| tid: [%lx]\n", reader_id, shared_array, tid);
         pthread_mutex_unlock(&mutex);
         sleep(1);
     }
