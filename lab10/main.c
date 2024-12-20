@@ -45,7 +45,6 @@ void* reader_thread(void* arg) {
         }
         printf("Reader (id[%d]) reads array: [%s]| tid: [%lx]\n", reader_id, shared_array, tid);
         pthread_mutex_unlock(&mutex);
-        sleep(1);
     }
     return NULL;
 }
