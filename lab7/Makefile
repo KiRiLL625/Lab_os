@@ -8,4 +8,5 @@ sender: sender.c
 receiver: receiver.c
 	gcc receiver.c -o receiver
 
-clean: rm -f sender receiver
+clean: 
+	rm -f sender receiver
