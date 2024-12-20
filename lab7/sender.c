@@ -19,9 +19,12 @@ typedef struct {
 } shared_data;
 
 int shmid;
+shared_data *shm_ptr;
+
 
 //Ctrl+C
 void handle_sigint(int sig) {
+    shmdt(shm_ptr);
     if(shmctl(shmid, IPC_RMID, NULL)){
         perror("shmctl");
     }
@@ -33,7 +36,6 @@ void handle_sigint(int sig) {
 
 int main() {
     key_t shm_key;
-    shared_data *shm_ptr;
 
     signal(SIGINT, handle_sigint);
 
