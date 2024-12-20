@@ -3,64 +3,77 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 #include <sys/stat.h>
+#include <sys/sem.h>
 #include <time.h>
 #include <string.h>
-#include <sys/sem.h>
+#include <signal.h>
 
-#define SHM_NAME "/shmemory"
+#define FTOK_PATH "."
 #define MAX_LEN 256
-#define SEM_KEY 52
 
 typedef struct {
     pid_t pid;
     char time_str[MAX_LEN];
+    //int data_ready;
 } shared_data;
 
+shared_data* shm_ptr;
+
+void handle_sigint(int arg){
+    shmdt(shm_ptr);
+    printf("Shmem detached\n");
+}
+
 int main() {
-    int shm_fd;
-    shared_data *shm_ptr;
-    int sem_id;
-    struct sembuf sem_op;
+    int shmid;
+    int semid;
+    key_t key;
+    signal(SIGINT, handle_sigint);
 
-    // Открытие разделяемой памяти
-    shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("shm_open");
+    //Открытие разделяемой памяти
+    key = ftok(FTOK_PATH, 'A');
+    if (key == -1) {
+        perror("ftok");
         exit(1);
     }
 
-    // Установка размера разделяемой памяти
-    if (ftruncate(shm_fd, sizeof(shared_data)) == -1) {
-        perror("ftruncate");
-        exit(1);
-    }
-
-    // Отображение разделяемой памяти в адресное пространство
-    shm_ptr = mmap(0, sizeof(shared_data), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shm_ptr == MAP_FAILED) {
-        perror("mmap");
-        exit(1);
-    }
-
-    // Получение семафора
-    sem_id = semget(SEM_KEY, 1, 0666);
-    if (sem_id == -1) {
+    semid = semget(key, 1, 0666);
+    if(semid == -1){
         perror("semget");
+        printf("Sender is not running\n");
         exit(1);
     }
+
+    if (semctl(semid, 0, SETVAL, 1) == -1) {
+        perror("semctl_setval");
+        semctl(semid, 0, IPC_RMID);
+        exit(1);
+    }
+
+    //Установка размера разделяемой памяти
+    shmid = shmget(key, MAX_LEN, 0666);
+    if(shmid == -1){
+        perror("shmget");
+        printf("Cannot find shared memory\n");
+        exit(1);
+    }
+
+    shm_ptr = (shared_data*) shmat(shmid, NULL, 0);
+    if(shm_ptr == (void*) -1){
+        perror("shmat");
+        exit(1);
+    }
+
+    struct sembuf sem = {0, -1, 0};
 
     while (1) {
-        // Ожидание sender
-        sem_op.sem_num = 0;
-        sem_op.sem_op = -1; //Уменьшение семафора
-        sem_op.sem_flg = 0;
-        if (semop(sem_id, &sem_op, 1) == -1) {
+        if(semop(semid, &sem, 1) == -1){
             perror("semop");
             exit(1);
         }
-
-        if (sem_op.sem_op == -1) {
+        //if (sem.sem_op == 1) {
             time_t now = time(NULL);
             struct tm *t = localtime(&now);
             char time_str[MAX_LEN];
@@ -68,7 +81,9 @@ int main() {
 
             printf("Receiver PID: %d, Time: %s, Sender PID: %d, Sender Time: %s\n",
                    getpid(), time_str, shm_ptr->pid, shm_ptr->time_str);
-        }
+            //shm_ptr->data_ready = 0;
+            //sem.sem_op = -1;
+        //}
 
         sleep(1);
     }
