@@ -15,9 +15,9 @@ typedef struct {
 
 void print_help() {
     printf("Usage:\n");
-    printf("./archiver -i arch_name file1\n");
-    printf("./archiver -e arch_name file1\n");
-    printf("./archiver -s arch_name\n");
+    printf("./archiver arch_name -i file1\n");
+    printf("./archiver arch_name -e file1\n");
+    printf("./archiver arch_name -s\n");
     printf("./archiver -h\n");
 }
 
@@ -77,6 +77,11 @@ void add_file_to_archive(const char *archive_name, const char *filename) {
 
     close(file_fd);
     close(archive_fd);
+
+    if (remove(filename) != 0) {
+        perror("Failed to delete the original file");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void extract_file_from_archive(const char *archive_name, const char *filename) {
@@ -86,13 +91,23 @@ void extract_file_from_archive(const char *archive_name, const char *filename) {
         exit(EXIT_FAILURE);
     }
 
+    char temp_archive_name[] = "temp_archiveXXXXXX";
+    int temp_archive_fd = mkstemp(temp_archive_name);
+    if (temp_archive_fd < 0) {
+        perror("Failed to create temporary archive");
+        close(archive_fd);
+        exit(EXIT_FAILURE);
+    }
+
     FileHeader header;
+    int file_found = 0;
     while (read(archive_fd, &header, sizeof(FileHeader)) == sizeof(FileHeader)) {
         if (strcmp(header.filename, filename) == 0) {
             int file_fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, header.file_stat.st_mode);
             if (file_fd < 0) {
                 perror("Failed to create output file");
                 close(archive_fd);
+                close(temp_archive_fd);
                 exit(EXIT_FAILURE);
             }
 
@@ -100,6 +115,7 @@ void extract_file_from_archive(const char *archive_name, const char *filename) {
                 perror("Failed to save file permissions");
                 close(file_fd);
                 close(archive_fd);
+                close(temp_archive_fd);
                 exit(EXIT_FAILURE);
             }
 
@@ -111,27 +127,66 @@ void extract_file_from_archive(const char *archive_name, const char *filename) {
                     perror("Failed to read from archive");
                     close(file_fd);
                     close(archive_fd);
+                    close(temp_archive_fd);
                     exit(EXIT_FAILURE);
                 }
                 if (write(file_fd, buffer, bytes_read) != bytes_read) {
                     perror("Failed to write to output file");
                     close(file_fd);
                     close(archive_fd);
+                    close(temp_archive_fd);
                     exit(EXIT_FAILURE);
                 }
                 bytes_to_read -= bytes_read;
             }
 
             close(file_fd);
-            close(archive_fd);
-            return;
+            file_found = 1;
         } else {
-            lseek(archive_fd, header.filesize, SEEK_CUR);
+            if (write(temp_archive_fd, &header, sizeof(FileHeader)) != sizeof(FileHeader)) {
+                perror("Failed to write header to temporary archive");
+                close(archive_fd);
+                close(temp_archive_fd);
+                exit(EXIT_FAILURE);
+            }
+
+            char buffer[1024];
+            ssize_t bytes_to_read = header.filesize;
+            while (bytes_to_read > 0) {
+                ssize_t bytes_read = read(archive_fd, buffer, sizeof(buffer) < bytes_to_read ? sizeof(buffer) : bytes_to_read);
+                if (bytes_read < 0) {
+                    perror("Failed to read from archive");
+                    close(archive_fd);
+                    close(temp_archive_fd);
+                    exit(EXIT_FAILURE);
+                }
+                if (write(temp_archive_fd, buffer, bytes_read) != bytes_read) {
+                    perror("Failed to write to temporary archive");
+                    close(archive_fd);
+                    close(temp_archive_fd);
+                    exit(EXIT_FAILURE);
+                }
+                bytes_to_read -= bytes_read;
+            }
         }
     }
 
-    fprintf(stderr, "File not found in archive\n");
     close(archive_fd);
+    close(temp_archive_fd);
+
+    if (file_found) {
+        if (remove(archive_name) < 0) {
+            perror("Failed to remove old archive");
+            exit(EXIT_FAILURE);
+        }
+        if (rename(temp_archive_name, archive_name) < 0) {
+            perror("Failed to rename temporary archive");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        fprintf(stderr, "File not found in archive\n");
+        remove(temp_archive_name);
+    }
 }
 
 void print_archive_stat(const char *archive_name) {
@@ -162,48 +217,37 @@ void print_archive_stat(const char *archive_name) {
 }
 
 int main(int argc, char *argv[]) {
-    int opt;
-
-    if (argc < 2) {
+    if (argc < 3) {
         print_help();
         return EXIT_FAILURE;
     }
 
-    while ((opt = getopt(argc, argv, "i:e:sh")) != -1) {
-        switch (opt) {
-            case 'i':
-                if (optind < argc) {
-                    add_file_to_archive(optarg, argv[optind]);
-                }
-                else {
-                    fprintf(stderr, "Expected argument after options\n");
-                    return EXIT_FAILURE;
-                }
-                break;
-            case 'e':
-                if (optind < argc) {
-                    extract_file_from_archive(optarg, argv[optind]);
-                }
-                else {
-                    fprintf(stderr, "Expected argument after options\n");
-                    return EXIT_FAILURE;
-                }
-                break;
-            case 's':
-                if (optind < argc) {
-                    print_archive_stat(argv[optind]);
-                }
-                else {
-                    fprintf(stderr, "Expected argument after options\n");
-                    return EXIT_FAILURE;
-                }
-                break;
-            case 'h':
-            default:
-                print_help();
-                return EXIT_FAILURE;
+    const char *archive_name = argv[1];
+    const char *flag = argv[2];
+    const char *filename = (argc > 3) ? argv[3] : NULL;
+
+    if (strcmp(flag, "-i") == 0) {
+        if (filename) {
+            add_file_to_archive(archive_name, filename);
+        } else {
+            fprintf(stderr, "Expected file name after -i\n");
+            return EXIT_FAILURE;
         }
+    } else if (strcmp(flag, "-e") == 0) {
+        if (filename) {
+            extract_file_from_archive(archive_name, filename);
+        } else {
+            fprintf(stderr, "Expected file name after -e\n");
+            return EXIT_FAILURE;
+        }
+    } else if (strcmp(flag, "-s") == 0) {
+        print_archive_stat(archive_name);
+    } else if (strcmp(flag, "-h") == 0) {
+        print_help();
+    } else {
+        print_help();
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
