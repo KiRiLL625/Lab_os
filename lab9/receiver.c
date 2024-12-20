@@ -24,6 +24,7 @@ shared_data* shm_ptr;
 void handle_sigint(int arg){
     shmdt(shm_ptr);
     printf("Shmem detached\n");
+    exit(0);
 }
 
 int main() {
