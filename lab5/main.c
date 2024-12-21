@@ -217,37 +217,72 @@ void print_archive_stat(const char *archive_name) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
+    int opt;
+    const char *archive_name = NULL;
+    const char *filename = NULL;
+    char flag = 0;
+
+    if (argc < 2) {
         print_help();
         return EXIT_FAILURE;
     }
 
-    const char *archive_name = argv[1];
-    const char *flag = argv[2];
-    const char *filename = (argc > 3) ? argv[3] : NULL;
-
-    if (strcmp(flag, "-i") == 0) {
-        if (filename) {
-            add_file_to_archive(archive_name, filename);
-        } else {
-            fprintf(stderr, "Expected file name after -i\n");
-            return EXIT_FAILURE;
-        }
-    } else if (strcmp(flag, "-e") == 0) {
-        if (filename) {
-            extract_file_from_archive(archive_name, filename);
-        } else {
-            fprintf(stderr, "Expected file name after -e\n");
-            return EXIT_FAILURE;
-        }
-    } else if (strcmp(flag, "-s") == 0) {
-        print_archive_stat(archive_name);
-    } else if (strcmp(flag, "-h") == 0) {
+    if (strcmp(argv[1], "-h") == 0) {
         print_help();
-    } else {
+        return EXIT_SUCCESS;
+    }
+
+    archive_name = argv[1];
+
+    while ((opt = getopt(argc - 1, argv + 1, "i:e:s")) != -1) {
+        switch (opt) {
+            case 'i':
+                flag = 'i';
+                filename = optarg;
+                break;
+            case 'e':
+                flag = 'e';
+                filename = optarg;
+                break;
+            case 's':
+                flag = 's';
+                break;
+            default:
+                print_help();
+                return EXIT_FAILURE;
+        }
+    }
+
+    if (!archive_name) {
+        fprintf(stderr, "Archive name is required\n");
         print_help();
         return EXIT_FAILURE;
     }
 
-    return EXIT_SUCCESS;
+    switch (flag) {
+        case 'i':
+            if (filename) {
+                add_file_to_archive(archive_name, filename);
+            } else {
+                fprintf(stderr, "Expected file name after -i\n");
+                return EXIT_FAILURE;
+            }
+            break;
+        case 'e':
+            if (filename) {
+                extract_file_from_archive(archive_name, filename);
+            } else {
+                fprintf(stderr, "Expected file name after -e\n");
+                return EXIT_FAILURE;
+            }
+            break;
+        case 's':
+            print_archive_stat(archive_name);
+            break;
+        default:
+            print_help();
+            return EXIT_FAILURE;
+    }
+
+    return 0;
 }
